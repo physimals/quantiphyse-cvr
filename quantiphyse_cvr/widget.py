@@ -58,6 +58,9 @@ class VbOptions(OptionsWidget):
         vbox = QtGui.QVBoxLayout()
         self.setLayout(vbox)
 
+        cite = Citation(FAB_CITE_TITLE, FAB_CITE_AUTHOR, FAB_CITE_JOURNAL)
+        vbox.addWidget(cite)
+
         self._optbox = OptionBox()
         self._optbox.add("<b>Model options</b>")
         self._optbox.add("Infer constant signal offset", BoolOption(default=True), key="infer-sig0")
@@ -100,7 +103,7 @@ class VbOptions(OptionsWidget):
             opts["method"] = "spatialvb"
             opts["param-spatial-priors"] = "M+"
 
-        self.debug("%s", opts)
+        #self.debug("%s", opts)
         processes = [
             {"Fabber" : opts},
         ]
@@ -145,20 +148,19 @@ class CvrPetCo2Widget(QpWidget):
     CVR modelling of BOLD-MRI with PETCO2
     """
     def __init__(self, **kwargs):
-        QpWidget.__init__(self, name="CVR-PETCO2", icon="", group="BOLD-MRI",
-                          desc="Bayesian modelling for cerebrovascular reactivity using BOLD-MRI and PETCO2", **kwargs)
+        QpWidget.__init__(self, name="CVR PETCO2", icon="cvr", group="BOLD-MRI",
+                          desc="Cerebrovascular reactivity using BOLD-MRI and PETCO2", **kwargs)
+        self.current_tab = 0
 
     def init_ui(self):
         vbox = QtGui.QVBoxLayout()
         self.setLayout(vbox)
 
-        title = TitleWidget(self, help="fabber-cvr", subtitle="Bayesian modelling for cerebrovascular reactivity using BOLD-MRI and PETCO2 v%s" % __version__)
+        title = TitleWidget(self, help="cvr", subtitle="Cerebrovascular reactivity using BOLD-MRI and PETCO2 v%s" % __version__)
         vbox.addWidget(title)
 
-        cite = Citation(FAB_CITE_TITLE, FAB_CITE_AUTHOR, FAB_CITE_JOURNAL)
-        vbox.addWidget(cite)
-
         self.tabs = QtGui.QTabWidget()
+        self.tabs.currentChanged.connect(self._tab_changed)
         vbox.addWidget(self.tabs)
 
         self.acquisition_opts = AcquisitionOptions(self.ivm, parent=self)
@@ -169,3 +171,15 @@ class CvrPetCo2Widget(QpWidget):
         self.tabs.addTab(self.glm_opts, "GLM modelling")
 
         vbox.addStretch(1)
+
+    def _tab_changed(self):
+        tab = self.tabs.currentIndex()
+        if tab in (1, 2):
+            self.current_tab = tab
+
+    def processes(self):
+        # For batch options, return whichever tab was last selected
+        if self.current_tab == 1:
+            return self.vb_opts.processes()
+        elif self.current_tab == 2:
+            return self.glm_opts.processes()
