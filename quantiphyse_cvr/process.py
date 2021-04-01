@@ -4,6 +4,8 @@ CVR Quantiphyse plugin - Processes
 Author: Martin Craig <martin.craig@nottingham.ac.uk>
 Copyright (c) 2021 University of Nottingham, Martin Craig
 """
+import io
+import logging
 import sys
 
 import numpy as np
@@ -97,7 +99,7 @@ class CvrPetCo2GlmProcess(Process):
     def timeout(self, queue):
         if queue.empty(): return
         while not queue.empty():
-            _, voxels_done = queue.get()
+            _worker_id, voxels_done = queue.get()
             self.voxels_done += voxels_done
         progress = float(self.voxels_done) / self.total_voxels
         self.sig_progress.emit(progress)
@@ -109,13 +111,13 @@ class CvrPetCo2GlmProcess(Process):
         if self.status == Process.SUCCEEDED:
             # Only include log from first process to avoid multiple repetitions
             for out in worker_output:
+                data_keys = out.keys()
                 if out and  hasattr(out, "log") and len(out.log) > 0:
                     # If there was a problem the log could be huge and full of
                     # nan messages. So chop it off at some 'reasonable' point
                     self.log(out.log[:MAX_LOG_SIZE])
                     if len(out.log) > MAX_LOG_SIZE:
                         self.log("WARNING: Log was too large - truncated at %i chars" % MAX_LOG_SIZE)
-                    data_keys = out.keys()
                     break
             first = True
             self.data_items = []
@@ -161,28 +163,21 @@ def _run_vb(worker_id, queue, data, mask, phys_data, infer_sig0, infer_delay, ba
             "delay" : mech_delay,
             "infer_sig0" : infer_sig0,
             "infer_delay" : infer_delay,
-            #"log_stream" : sys.stdout,
-            "max_iterations" : 50,
+            "max_iterations" : 10,
         }
 
         data_model = DataModel(data, mask=mask, **options)
         fwd_model = CvrPetCo2Model(data_model, **options)
 
-        import sys, logging
-        logging.getLogger("vaby").setLevel(logging.INFO)
-        handler = logging.StreamHandler(sys.stdout)
+        log = io.StringIO()
+        handler = logging.StreamHandler(log)
         handler.setFormatter(logging.Formatter('%(levelname)s : %(message)s'))
-        logging.getLogger().addHandler(handler)
-
-        #setup_logging(output, **options)
-        #log = logging.getLogger(__name__)
-        #log.info("AVB %s", __version__)
-        #fwd_model.log_config()
+        logging.getLogger("Avb").addHandler(handler)
+        logging.getLogger("Avb").setLevel(logging.INFO)
 
         tpts = fwd_model.tpts()
         avb = Avb(tpts, data_model, fwd_model, **options)
         avb.run()
-        #log.info("DONE: %.3fs", runtime)
 
         ret = {}
         for idx, param in enumerate(fwd_model.params):
@@ -193,6 +188,7 @@ def _run_vb(worker_id, queue, data, mask, phys_data, infer_sig0, infer_delay, ba
                 ret[param.name + "_var"] = data_model.nifti_image(data).get_fdata()
 
         ret["modelfit"] = data_model.nifti_image(avb.modelfit).get_fdata()
+        ret = (ret, log.getvalue())
 
         queue.put((worker_id, data_model.n_unmasked_voxels))
         return worker_id, True, ret
@@ -256,7 +252,7 @@ class CvrPetCo2VbProcess(Process):
     def timeout(self, queue):
         if queue.empty(): return
         while not queue.empty():
-            _, voxels_done = queue.get()
+            _worker_id, voxels_done = queue.get()
             self.voxels_done += voxels_done
         progress = float(self.voxels_done) / self.total_voxels
         self.sig_progress.emit(progress)
@@ -267,22 +263,20 @@ class CvrPetCo2VbProcess(Process):
         """
         if self.status == Process.SUCCEEDED:
             # Only include log from first process to avoid multiple repetitions
-            for out in worker_output:
-                if out and  hasattr(out, "log") and len(out.log) > 0:
+            for data, log in worker_output:
+                data_keys = data.keys()
+                if log:
                     # If there was a problem the log could be huge and full of 
                     # nan messages. So chop it off at some 'reasonable' point
-                    self.log(out.log[:MAX_LOG_SIZE])
-                    if len(out.log) > MAX_LOG_SIZE:
+                    self.log(log[:MAX_LOG_SIZE])
+                    if len(log) > MAX_LOG_SIZE:
                         self.log("WARNING: Log was too large - truncated at %i chars" % MAX_LOG_SIZE)
                     break
             first = True
-            data_keys = []
             self.data_items = []
-            for out in worker_output:
-                data_keys = out.keys()
             for key in data_keys:
                 self.debug(key)
-                recombined_data = self.recombine_data([o.get(key, None) for o in worker_output])
+                recombined_data = self.recombine_data([o.get(key, None) for o, l in worker_output])
                 name = key + self.suffix
                 if key is not None:
                     self.data_items.append(name)
