@@ -50,7 +50,7 @@ class AcquisitionOptions(OptionsWidget):
         vbox.addWidget(self._optbox)
         vbox.addStretch(1)
 
-class VbOptions(OptionsWidget):
+class FabberVbOptions(OptionsWidget):
     def __init__(self, ivm, parent, acq_options):
         OptionsWidget.__init__(self, ivm, parent)
         self.acq_options = acq_options
@@ -87,6 +87,15 @@ class VbOptions(OptionsWidget):
         opts.update(self.acq_options._optbox.values())
         opts.update(self._optbox.values())
 
+        # Fabber model requires the physiological data to be preprocessed
+        #from vaby.data import DataModel
+        #data_model = DataModel(data, mask=mask, **opts)
+        from vb_models_cvr.petco2 import CvrPetCo2Model
+        opts["phys_data"] = opts["phys-data"] # FIXME hack
+        model = CvrPetCo2Model(None, **opts)
+        opts["phys-data"] = model.co2_mmHg
+        opts.pop("phys_data")
+
         # Deal with the output suffix if specified
         suffix = opts.pop("output-suffix", "")
         if suffix and suffix[0] != "_":
@@ -98,14 +107,52 @@ class VbOptions(OptionsWidget):
                 "modelfit" : "modelfit%s" % suffix,
         }
 
+        # In spatial mode use sig0 as regularization parameter
         if opts.pop("spatial", False):
-            # In spatial mode use sig0 as regularization parameter
             opts["method"] = "spatialvb"
             opts["param-spatial-priors"] = "M+"
 
         #self.debug("%s", opts)
         processes = [
             {"Fabber" : opts},
+        ]
+
+        return processes
+
+class VbOptions(OptionsWidget):
+    def __init__(self, ivm, parent, acq_options):
+        OptionsWidget.__init__(self, ivm, parent)
+        self.acq_options = acq_options
+
+        vbox = QtGui.QVBoxLayout()
+        self.setLayout(vbox)
+
+        cite = Citation(FAB_CITE_TITLE, FAB_CITE_AUTHOR, FAB_CITE_JOURNAL)
+        vbox.addWidget(cite)
+
+        self._optbox = OptionBox()
+        self._optbox.add("<b>Model options</b>")
+        self._optbox.add("Infer constant signal offset", BoolOption(default=True), key="infer-sig0")
+        self._optbox.add("Infer delay", BoolOption(default=True), key="infer-delay")
+
+        #self._optbox.add("<b>Model fitting options</b>")
+        #self._optbox.add("Spatial regularization", BoolOption(default=True), key="spatial")
+        self._optbox.add("<b>Output options</b>")
+        self._optbox.add("Output data name suffix", TextOption(), checked=True, key="output-suffix")
+
+        vbox.addWidget(self._optbox)
+        vbox.addWidget(RunWidget(self))
+        vbox.addStretch(1)
+
+    def processes(self):
+        opts = {
+        }
+        opts.update(self.acq_options._optbox.values())
+        opts.update(self._optbox.values())
+
+        #self.debug("%s", opts)
+        processes = [
+            {"CvrPetCo2Vb" : opts},
         ]
 
         return processes
@@ -165,6 +212,8 @@ class CvrPetCo2Widget(QpWidget):
 
         self.acquisition_opts = AcquisitionOptions(self.ivm, parent=self)
         self.tabs.addTab(self.acquisition_opts, "Acquisition Options")
+        self.fabber_opts = FabberVbOptions(self.ivm, self, self.acquisition_opts)
+        self.tabs.addTab(self.fabber_opts, "Fabber modelling")
         self.vb_opts = VbOptions(self.ivm, self, self.acquisition_opts)
         self.tabs.addTab(self.vb_opts, "Bayesian modelling")
         self.glm_opts = GlmOptions(self.ivm, self, self.acquisition_opts)
@@ -174,12 +223,14 @@ class CvrPetCo2Widget(QpWidget):
 
     def _tab_changed(self):
         tab = self.tabs.currentIndex()
-        if tab in (1, 2):
+        if tab in (1, 2, 3):
             self.current_tab = tab
 
     def processes(self):
         # For batch options, return whichever tab was last selected
         if self.current_tab == 1:
-            return self.vb_opts.processes()
+            return self.fabber_opts.processes()
         elif self.current_tab == 2:
+            return self.vb_opts.processes()
+        elif self.current_tab == 3:
             return self.glm_opts.processes()
