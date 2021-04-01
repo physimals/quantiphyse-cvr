@@ -138,6 +138,7 @@ class VbOptions(OptionsWidget):
         #self._optbox.add("<b>Model fitting options</b>")
         #self._optbox.add("Spatial regularization", BoolOption(default=True), key="spatial")
         self._optbox.add("<b>Output options</b>")
+        self._optbox.add("Output variance maps", BoolOption(), key="output-var")
         self._optbox.add("Output data name suffix", TextOption(), checked=True, key="output-suffix")
 
         vbox.addWidget(self._optbox)

@@ -146,7 +146,7 @@ class CvrPetCo2GlmProcess(Process):
                     self.log(out.log)
                     break
 
-def _run_vb(worker_id, queue, data, mask, phys_data, infer_sig0, infer_delay, baseline, blocksize_on, blocksize_off, samp_rate, mech_delay, delay_min, delay_max, delay_step):
+def _run_vb(worker_id, queue, data, mask, phys_data, infer_sig0, infer_delay, baseline, blocksize_on, blocksize_off, samp_rate, mech_delay, delay_min, delay_max, delay_step, output_var):
     try:
         from vaby.data import DataModel
         from vaby_avb import Avb
@@ -161,12 +161,6 @@ def _run_vb(worker_id, queue, data, mask, phys_data, infer_sig0, infer_delay, ba
             "delay" : mech_delay,
             "infer_sig0" : infer_sig0,
             "infer_delay" : infer_delay,
-            #"save_mean" : True,
-            #"save_noise" : True,
-            #"save_runtime" : True,
-            #"save_free_energy" : True,
-            #"save_model_fit" : True,
-            #"save_log" : True,
             #"log_stream" : sys.stdout,
             "max_iterations" : 50,
         }
@@ -193,16 +187,12 @@ def _run_vb(worker_id, queue, data, mask, phys_data, infer_sig0, infer_delay, ba
         ret = {}
         for idx, param in enumerate(fwd_model.params):
             data = avb.model_mean[idx]
-            shape = data_model.shape
-            if data.ndim > 1:
-                shape = list(shape) + [data.shape[1]]
-            ndata = np.zeros(shape, dtype=np.float)
-            ndata[mask > 0] = data
-            ret[param.name] = ndata
+            ret[param.name] = data_model.nifti_image(data).get_fdata()
+            if output_var:
+                data = avb.model_var[idx]
+                ret[param.name + "_var"] = data_model.nifti_image(data).get_fdata()
 
-        modelfit_data = np.zeros(list(data_model.shape) + [data_model.n_tpts], dtype=np.float)
-        modelfit_data[mask > 0] = avb.modelfit
-        ret["modelfit"] = modelfit_data
+        ret["modelfit"] = data_model.nifti_image(avb.modelfit).get_fdata()
 
         queue.put((worker_id, data_model.n_unmasked_voxels))
         return worker_id, True, ret
@@ -245,6 +235,7 @@ class CvrPetCo2VbProcess(Process):
         delay_min = options.pop("delay-min", 0)
         delay_max = options.pop("delay-max", 0)
         delay_step = options.pop("delay-step", 1)
+        output_var = options.pop("output-var", False)
 
         infer_sig0 = options.pop("infer-sig0", True)
         infer_delay = options.pop("infer-delay", True)
@@ -257,7 +248,7 @@ class CvrPetCo2VbProcess(Process):
         mask_bb = roi.raw()[tuple(self.bb_slices)]
         n_workers = data_bb.shape[0]
 
-        args = [data_bb, mask_bb, phys_data, infer_sig0, infer_delay, baseline, blocksize_on, blocksize_off, samp_rate, mech_delay, delay_min, delay_max, delay_step]
+        args = [data_bb, mask_bb, phys_data, infer_sig0, infer_delay, baseline, blocksize_on, blocksize_off, samp_rate, mech_delay, delay_min, delay_max, delay_step, output_var]
         self.voxels_done = 0
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)
