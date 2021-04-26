@@ -7,6 +7,7 @@ Copyright (c) 2021 University of Nottingham, Martin Craig
 import io
 import logging
 import sys
+import os
 
 import numpy as np
 
@@ -18,7 +19,7 @@ MAX_LOG_SIZE=100000
 def _run_glm(worker_id, queue, data, mask, phys_data, baseline, blocksize_on, blocksize_off, samp_rate, mech_delay, delay_min, delay_max, delay_step):
     try:
         from vaby.data import DataModel
-        from vb_models_cvr.petco2 import CvrPetCo2Model
+        from vaby_models_cvr.petco2 import CvrPetCo2Model
 
         options = {
             "phys_data" : phys_data,
@@ -72,6 +73,8 @@ class CvrPetCo2GlmProcess(Process):
         phys_data = options.pop('phys-data', None)
         if phys_data is None:
             raise QpException("Physiological data option 'phys-data' must be given")
+        if isinstance(phys_data, str) and not os.path.isabs(phys_data):
+            phys_data = os.path.join(self.indir, phys_data)
 
         # Non-compulsary options
         baseline = options.pop("baseline", 60)
@@ -221,6 +224,8 @@ class CvrPetCo2VbProcess(Process):
         phys_data = options.pop('phys-data', None)
         if phys_data is None:
             raise QpException("Physiological data option 'phys-data' must be given")
+        if isinstance(phys_data, str) and not os.path.isabs(phys_data):
+            phys_data = os.path.join(self.indir, phys_data)
 
         # Non-compulsary options
         baseline = options.pop("baseline", 60)
