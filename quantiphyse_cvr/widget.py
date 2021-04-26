@@ -214,9 +214,9 @@ class CvrPetCo2Widget(QpWidget):
         self.acquisition_opts = AcquisitionOptions(self.ivm, parent=self)
         self.tabs.addTab(self.acquisition_opts, "Acquisition Options")
         self.fabber_opts = FabberVbOptions(self.ivm, self, self.acquisition_opts)
-        self.tabs.addTab(self.fabber_opts, "Fabber modelling")
-        self.vb_opts = VbOptions(self.ivm, self, self.acquisition_opts)
-        self.tabs.addTab(self.vb_opts, "Bayesian modelling")
+        self.tabs.addTab(self.fabber_opts, "Bayesian modelling")
+        #self.vb_opts = VbOptions(self.ivm, self, self.acquisition_opts)
+        #self.tabs.addTab(self.vb_opts, "VABY modelling")
         self.glm_opts = GlmOptions(self.ivm, self, self.acquisition_opts)
         self.tabs.addTab(self.glm_opts, "GLM modelling")
 
