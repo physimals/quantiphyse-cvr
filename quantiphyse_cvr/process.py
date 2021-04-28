@@ -11,6 +11,11 @@ import os
 
 import numpy as np
 
+# Silence Tensorflow random messages
+import tensorflow as tf
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+tf.get_logger().setLevel(logging.ERROR)
+
 from quantiphyse.utils import QpException
 from quantiphyse.processes import Process
 
@@ -32,6 +37,14 @@ def _run_glm(worker_id, queue, data, mask, phys_data, tr, baseline, samp_rate, d
             #"delay" : mech_delay,
         }
 
+        # Set up log to go to string buffer
+        log = io.StringIO()
+        handler = logging.StreamHandler(log)
+        handler.setFormatter(logging.Formatter('%(levelname)s : %(message)s'))
+        logging.getLogger().handlers.clear()
+        logging.getLogger().addHandler(handler)
+        logging.getLogger().setLevel(logging.INFO)
+
         data_model = DataModel(data, mask=mask)
         fwd_model = CvrPetCo2Model(data_model, **options)
         cvr, delay, sig0, modelfit = fwd_model.fit_glm(delay_min=delay_min, delay_max=delay_max, delay_step=delay_step)
@@ -45,6 +58,8 @@ def _run_glm(worker_id, queue, data, mask, phys_data, tr, baseline, samp_rate, d
             ndata[mask > 0] = data
             ret[name] = ndata
         queue.put((worker_id, data_model.n_unmasked_voxels))
+
+        ret = (ret, log.getvalue())
         return worker_id, True, ret
     except:
         import traceback
@@ -120,20 +135,20 @@ class CvrPetCo2GlmProcess(Process):
         """
         if self.status == Process.SUCCEEDED:
             # Only include log from first process to avoid multiple repetitions
-            for out in worker_output:
-                data_keys = out.keys()
-                if out and  hasattr(out, "log") and len(out.log) > 0:
+            for data, log in worker_output:
+                data_keys = data.keys()
+                if log:
                     # If there was a problem the log could be huge and full of
                     # nan messages. So chop it off at some 'reasonable' point
-                    self.log(out.log[:MAX_LOG_SIZE])
-                    if len(out.log) > MAX_LOG_SIZE:
+                    self.log(log[:MAX_LOG_SIZE])
+                    if len(log) > MAX_LOG_SIZE:
                         self.log("WARNING: Log was too large - truncated at %i chars" % MAX_LOG_SIZE)
                     break
             first = True
             self.data_items = []
             for key in data_keys:
                 self.debug(key)
-                recombined_data = self.recombine_data([o.get(key, None) for o in worker_output])
+                recombined_data = self.recombine_data([o.get(key, None) for o, l in worker_output])
                 name = key + self.suffix
                 if key is not None:
                     self.data_items.append(name)
@@ -181,14 +196,13 @@ def _run_vb(worker_id, queue, data, mask, phys_data, tr, infer_sig0, infer_delay
         data_model = DataModel(data, mask=mask, **options)
         fwd_model = CvrPetCo2Model(data_model, **options)
 
+        # Set up log to go to string buffer
         log = io.StringIO()
-        import sys
-        handler = logging.StreamHandler(sys.stderr)
+        handler = logging.StreamHandler(log)
         handler.setFormatter(logging.Formatter('%(levelname)s : %(message)s'))
-        logging.getLogger("CvrPetCo2Model").addHandler(handler)
-        logging.getLogger("CvrPetCo2Model").setLevel(logging.INFO)
-        logging.getLogger("Avb").addHandler(handler)
-        logging.getLogger("Avb").setLevel(logging.INFO)
+        logging.getLogger().handlers.clear()
+        logging.getLogger().addHandler(handler)
+        logging.getLogger().setLevel(logging.INFO)
 
         tpts = fwd_model.tpts()
         avb = Avb(tpts, data_model, fwd_model, **options)
