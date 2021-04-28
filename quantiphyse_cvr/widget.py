@@ -208,7 +208,7 @@ class CvrPetCo2Widget(QpWidget):
     CVR modelling of BOLD-MRI with PETCO2
     """
     def __init__(self, **kwargs):
-        QpWidget.__init__(self, name="CVR PETCO2", icon="cvr", group="BOLD-MRI",
+        QpWidget.__init__(self, name="CVR PETCO2", icon="cvr", group="CVR",
                           desc="Cerebrovascular reactivity using BOLD-MRI and PETCO2", **kwargs)
         self.current_tab = 0
 
