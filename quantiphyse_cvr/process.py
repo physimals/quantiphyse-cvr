@@ -16,18 +16,20 @@ from quantiphyse.processes import Process
 
 MAX_LOG_SIZE=100000
 
-def _run_glm(worker_id, queue, data, mask, phys_data, baseline, blocksize_on, blocksize_off, samp_rate, mech_delay, delay_min, delay_max, delay_step):
+def _run_glm(worker_id, queue, data, mask, phys_data, tr, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step):
     try:
         from vaby.data import DataModel
         from vaby_models_cvr.petco2 import CvrPetCo2Model
 
         options = {
             "phys_data" : phys_data,
+            "tr" : tr,
             "baseline" : baseline,
-            "blocksize_on" : blocksize_on,
-            "blocksize_off" : blocksize_off,
+            #"blocksize_on" : blocksize_on,
+            #"blocksize_off" : blocksize_off,
             "samp_rate" : samp_rate,
-            "delay" : mech_delay,
+            "data_start_time" : data_start_time,
+            #"delay" : mech_delay,
         }
 
         data_model = DataModel(data, mask=mask)
@@ -75,13 +77,17 @@ class CvrPetCo2GlmProcess(Process):
             raise QpException("Physiological data option 'phys-data' must be given")
         if isinstance(phys_data, str) and not os.path.isabs(phys_data):
             phys_data = os.path.join(self.indir, phys_data)
+        tr = options.pop("tr", None)
+        if tr is None:
+            raise QpException("TR must be given")
 
         # Non-compulsary options
         baseline = options.pop("baseline", 60)
-        blocksize_on = options.pop("blocksize-on", 120)
-        blocksize_off = options.pop("blocksize-off", 120)
+        #blocksize_on = options.pop("blocksize-on", 120)
+        #blocksize_off = options.pop("blocksize-off", 120)
         samp_rate = options.pop("samp-rate", 100)
-        mech_delay = options.pop("delay", 15)
+        #mech_delay = options.pop("delay", 15)
+        data_start_time = options.pop("data-start-time", None)
         delay_min = options.pop("delay-min", 0)
         delay_max = options.pop("delay-max", 0)
         delay_step = options.pop("delay-step", 1)
@@ -92,9 +98,10 @@ class CvrPetCo2GlmProcess(Process):
         self.debug("Using bounding box: %s", self.bb_slices)
         data_bb = data.raw()[tuple(self.bb_slices)]
         mask_bb = roi.raw()[tuple(self.bb_slices)]
-        n_workers = data_bb.shape[0]
+        #n_workers = data_bb.shape[0]
+        n_workers = 1
 
-        args = [data_bb, mask_bb, phys_data, baseline, blocksize_on, blocksize_off, samp_rate, mech_delay, delay_min, delay_max, delay_step]
+        args = [data_bb, mask_bb, phys_data, tr, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step]
         self.voxels_done = 0
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)
@@ -151,7 +158,7 @@ class CvrPetCo2GlmProcess(Process):
                     self.log(out.log)
                     break
 
-def _run_vb(worker_id, queue, data, mask, phys_data, infer_sig0, infer_delay, baseline, blocksize_on, blocksize_off, samp_rate, mech_delay, delay_min, delay_max, delay_step, output_var):
+def _run_vb(worker_id, queue, data, mask, phys_data, tr, infer_sig0, infer_delay, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step, output_var):
     try:
         from vaby.data import DataModel
         from vaby_avb import Avb
@@ -159,11 +166,13 @@ def _run_vb(worker_id, queue, data, mask, phys_data, infer_sig0, infer_delay, ba
 
         options = {
             "phys_data" : phys_data,
+            "tr" : tr,
             "baseline" : baseline,
-            "blocksize_on" : blocksize_on,
-            "blocksize_off" : blocksize_off,
+            #"blocksize_on" : blocksize_on,
+            #"blocksize_off" : blocksize_off,
             "samp_rate" : samp_rate,
-            "delay" : mech_delay,
+            "data_start_time" : data_start_time,
+            #"delay" : mech_delay,
             "infer_sig0" : infer_sig0,
             "infer_delay" : infer_delay,
             "max_iterations" : 10,
@@ -173,8 +182,11 @@ def _run_vb(worker_id, queue, data, mask, phys_data, infer_sig0, infer_delay, ba
         fwd_model = CvrPetCo2Model(data_model, **options)
 
         log = io.StringIO()
-        handler = logging.StreamHandler(log)
+        import sys
+        handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(logging.Formatter('%(levelname)s : %(message)s'))
+        logging.getLogger("CvrPetCo2Model").addHandler(handler)
+        logging.getLogger("CvrPetCo2Model").setLevel(logging.INFO)
         logging.getLogger("Avb").addHandler(handler)
         logging.getLogger("Avb").setLevel(logging.INFO)
 
@@ -226,13 +238,17 @@ class CvrPetCo2VbProcess(Process):
             raise QpException("Physiological data option 'phys-data' must be given")
         if isinstance(phys_data, str) and not os.path.isabs(phys_data):
             phys_data = os.path.join(self.indir, phys_data)
+        tr = options.pop("tr", None)
+        if tr is None:
+            raise QpException("TR must be given")
 
         # Non-compulsary options
         baseline = options.pop("baseline", 60)
-        blocksize_on = options.pop("blocksize-on", 120)
-        blocksize_off = options.pop("blocksize-off", 120)
+        #blocksize_on = options.pop("blocksize-on", 120)
+        #blocksize_off = options.pop("blocksize-off", 120)
         samp_rate = options.pop("samp-rate", 100)
-        mech_delay = options.pop("delay", 15)
+        #mech_delay = options.pop("delay", 15)
+        data_start_time = options.pop("data-start-time", None)
         delay_min = options.pop("delay-min", 0)
         delay_max = options.pop("delay-max", 0)
         delay_step = options.pop("delay-step", 1)
@@ -247,9 +263,10 @@ class CvrPetCo2VbProcess(Process):
         self.debug("Using bounding box: %s", self.bb_slices)
         data_bb = data.raw()[tuple(self.bb_slices)]
         mask_bb = roi.raw()[tuple(self.bb_slices)]
-        n_workers = data_bb.shape[0]
+        #n_workers = data_bb.shape[0]
+        n_workers = 1
 
-        args = [data_bb, mask_bb, phys_data, infer_sig0, infer_delay, baseline, blocksize_on, blocksize_off, samp_rate, mech_delay, delay_min, delay_max, delay_step, output_var]
+        args = [data_bb, mask_bb, phys_data, tr, infer_sig0, infer_delay, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step, output_var]
         self.voxels_done = 0
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)

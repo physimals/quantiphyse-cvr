@@ -13,7 +13,8 @@ except ImportError:
     from PySide2 import QtGui, QtCore, QtWidgets
 
 from quantiphyse.gui.widgets import QpWidget, Citation, TitleWidget, RunWidget
-from quantiphyse.gui.options import OptionBox, DataOption, NumericOption, BoolOption, NumberListOption, TextOption, FileOption
+from quantiphyse.gui.options import OptionBox, DataOption, NumericOption, BoolOption, NumberListOption, TextOption, FileOption, ChoiceOption
+from quantiphyse.utils import LogSource
 
 from ._version import __version__
 
@@ -21,11 +22,12 @@ FAB_CITE_TITLE = "Variational Bayesian inference for a non-linear forward model"
 FAB_CITE_AUTHOR = "Chappell MA, Groves AR, Whitcher B, Woolrich MW."
 FAB_CITE_JOURNAL = "IEEE Transactions on Signal Processing 57(1):223-236, 2009."
 
-class OptionsWidget(QtGui.QWidget):
+class OptionsWidget(QtGui.QWidget, LogSource):
 
     sig_changed = QtCore.Signal()
 
     def __init__(self, ivm, parent):
+        LogSource.__init__(self)
         QtGui.QWidget.__init__(self, parent)
         self.ivm = ivm
 
@@ -40,15 +42,28 @@ class AcquisitionOptions(OptionsWidget):
         self._optbox.add("<b>Data</b>")
         self._optbox.add("BOLD timeseries data", DataOption(self.ivm), key="data")
         self._optbox.add("ROI", DataOption(self.ivm, rois=True, data=False), key="roi")
-        self._optbox.add("Physiological data", FileOption(), key="phys-data")
+        self._optbox.add("Physiological data (CO<sub>2</sub>/O<sub>2</sub>)", FileOption(plot_btn=True), key="phys-data")
+        self._optbox.add("Sampling frequency (Hz)", NumericOption(minval=0, maxval=1000, default=100, intonly=True), key="samp-rate")
+        #self._optbox.add("ON-block duration (s)", NumericOption(minval=0, maxval=200, default=120, intonly=True), key="blocksize-on")
+        #self._optbox.add("OFF-block duration (s)", NumericOption(minval=0, maxval=200, default=120, intonly=True), key="blocksize-off")
+        self._optbox.add("TR for MRI timeseries (s)", NumericOption(minval=0, maxval=5, default=1.0), key="tr")
         self._optbox.add("Baseline period (s)", NumericOption(minval=0, maxval=200, default=60, intonly=True), key="baseline")
-        self._optbox.add("ON-block duration (s)", NumericOption(minval=0, maxval=200, default=120, intonly=True), key="blocksize-on")
-        self._optbox.add("OFF-block duration (s)", NumericOption(minval=0, maxval=200, default=120, intonly=True), key="blocksize-off")
-        self._optbox.add("PCO2 sampling frequency (Hz)", NumericOption(minval=0, maxval=1000, default=100, intonly=True), key="samp-rate")
-        self._optbox.add("PCO2 mechanical delay (s)", NumericOption(minval=0, maxval=60, default=15, intonly=True), key="delay")
+        self._optbox.add("MRI timeseries alignment", ChoiceOption(["Automatic", "Manual"]), key="mri-align")
+        #self._optbox.add("PCO2 mechanical delay (s)", NumericOption(minval=0, maxval=60, default=15, intonly=True), key="delay")
+        self._optbox.option("mri-align").sig_changed.connect(self._align_changed)
+        self._optbox.add("MRI timeseries start time (s)", NumericOption(minval=0, maxval=1000, default=0), key="data-start-time")
 
         vbox.addWidget(self._optbox)
         vbox.addStretch(1)
+        self._align_changed()
+
+    def _align_changed(self):
+        self._optbox.set_visible("data-start-time", self._optbox.option("mri-align").value == "Manual")
+
+    def options(self):
+        opts = self._optbox.values()
+        opts.pop("mri-align", None)
+        return opts
 
 class FabberVbOptions(OptionsWidget):
     def __init__(self, ivm, parent, acq_options):
@@ -82,17 +97,17 @@ class FabberVbOptions(OptionsWidget):
             "save-mean" : True,
             "save-model-fit" : True,
             "noise" : "white",
-            "max-iterations" : 20,
+            "max-iterations" : 10,
         }
-        opts.update(self.acq_options._optbox.values())
+        opts.update(self.acq_options.options())
         opts.update(self._optbox.values())
 
         # Fabber model requires the physiological data to be preprocessed
-        #from vaby.data import DataModel
-        #data_model = DataModel(data, mask=mask, **opts)
-        from vb_models_cvr.petco2 import CvrPetCo2Model
+        from vaby.data import DataModel
+        data_model = DataModel(opts["data"].raw(), mask=opts["mask"].raw())
+        from vaby_models_cvr.petco2 import CvrPetCo2Model
         opts["phys_data"] = opts["phys-data"] # FIXME hack
-        model = CvrPetCo2Model(None, **opts)
+        model = CvrPetCo2Model(data_model, **opts)
         opts["phys-data"] = model.co2_mmHg
         opts.pop("phys_data")
 
@@ -112,7 +127,7 @@ class FabberVbOptions(OptionsWidget):
             opts["method"] = "spatialvb"
             opts["param-spatial-priors"] = "M+"
 
-        #self.debug("%s", opts)
+        self.debug("Fabber CVR options: %s", opts)
         processes = [
             {"Fabber" : opts},
         ]
@@ -146,12 +161,10 @@ class VbOptions(OptionsWidget):
         vbox.addStretch(1)
 
     def processes(self):
-        opts = {
-        }
-        opts.update(self.acq_options._optbox.values())
+        opts = {}
+        opts.update(self.acq_options.options())
         opts.update(self._optbox.values())
-
-        #self.debug("%s", opts)
+        self.debug("CvrPetCo2Vb options: %s", opts)
         processes = [
             {"CvrPetCo2Vb" : opts},
         ]
@@ -180,11 +193,10 @@ class GlmOptions(OptionsWidget):
         vbox.addStretch(1)
 
     def processes(self):
-        opts = {
-        }
-        opts.update(self.acq_options._optbox.values())
+        opts = {}
+        opts.update(self.acq_options.options())
         opts.update(self._optbox.values())
-        #self.debug("%s", opts)
+        self.debug("CvrPetCo2Glm options: %s", opts)
         processes = [
             {"CvrPetCo2Glm" : opts},
         ]
@@ -215,8 +227,8 @@ class CvrPetCo2Widget(QpWidget):
         self.tabs.addTab(self.acquisition_opts, "Acquisition Options")
         self.fabber_opts = FabberVbOptions(self.ivm, self, self.acquisition_opts)
         self.tabs.addTab(self.fabber_opts, "Bayesian modelling")
-        #self.vb_opts = VbOptions(self.ivm, self, self.acquisition_opts)
-        #self.tabs.addTab(self.vb_opts, "VABY modelling")
+        self.vb_opts = VbOptions(self.ivm, self, self.acquisition_opts)
+        self.tabs.addTab(self.vb_opts, "VABY modelling")
         self.glm_opts = GlmOptions(self.ivm, self, self.acquisition_opts)
         self.tabs.addTab(self.glm_opts, "GLM modelling")
 
