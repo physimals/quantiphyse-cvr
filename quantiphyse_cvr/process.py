@@ -21,6 +21,11 @@ from quantiphyse.processes import Process
 
 MAX_LOG_SIZE=100000
 
+def _get_progress_cb(worker_id, queue, n_voxels):
+    def _progress(frac):
+        queue.put((worker_id, frac * n_voxels))
+    return _progress
+
 def _run_glm(worker_id, queue, data, mask, phys_data, tr, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step):
     try:
         from vaby.data import DataModel
@@ -47,7 +52,7 @@ def _run_glm(worker_id, queue, data, mask, phys_data, tr, baseline, samp_rate, d
 
         data_model = DataModel(data, mask=mask)
         fwd_model = CvrPetCo2Model(data_model, **options)
-        cvr, delay, sig0, modelfit = fwd_model.fit_glm(delay_min=delay_min, delay_max=delay_max, delay_step=delay_step)
+        cvr, delay, sig0, modelfit = fwd_model.fit_glm(delay_min=delay_min, delay_max=delay_max, delay_step=delay_step, progress_cb=_get_progress_cb(worker_id, queue, data_model.n_unmasked_voxels))
         ret = {"cvr" : cvr, "delay" : delay, "sig0" : sig0, "modelfit" : modelfit}
         for name in list(ret.keys()):
             data = ret[name]
@@ -117,16 +122,16 @@ class CvrPetCo2GlmProcess(Process):
         n_workers = 1
 
         args = [data_bb, mask_bb, phys_data, tr, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step]
-        self.voxels_done = 0
+        self.voxels_done = [0] * n_workers
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)
 
     def timeout(self, queue):
         if queue.empty(): return
         while not queue.empty():
-            _worker_id, voxels_done = queue.get()
-            self.voxels_done += voxels_done
-        progress = float(self.voxels_done) / self.total_voxels
+            worker_id, voxels_done = queue.get()
+            self.voxels_done[worker_id] = voxels_done
+        progress = float(sum(self.voxels_done)) / self.total_voxels
         self.sig_progress.emit(progress)
 
     def finished(self, worker_output):
@@ -205,7 +210,7 @@ def _run_vb(worker_id, queue, data, mask, phys_data, tr, infer_sig0, infer_delay
         logging.getLogger().setLevel(logging.INFO)
 
         tpts = fwd_model.tpts()
-        avb = Avb(tpts, data_model, fwd_model, **options)
+        avb = Avb(tpts, data_model, fwd_model, progress_cb=_get_progress_cb(worker_id, queue, data_model.n_unmasked_voxels), **options)
         avb.run()
 
         ret = {}
@@ -281,16 +286,16 @@ class CvrPetCo2VbProcess(Process):
         n_workers = 1
 
         args = [data_bb, mask_bb, phys_data, tr, infer_sig0, infer_delay, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step, output_var]
-        self.voxels_done = 0
+        self.voxels_done = [0] * n_workers
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)
 
     def timeout(self, queue):
         if queue.empty(): return
         while not queue.empty():
-            _worker_id, voxels_done = queue.get()
-            self.voxels_done += voxels_done
-        progress = float(self.voxels_done) / self.total_voxels
+            worker_id, voxels_done = queue.get()
+            self.voxels_done[worker_id] = voxels_done
+        progress = float(sum(self.voxels_done)) / self.total_voxels
         self.sig_progress.emit(progress)
 
     def finished(self, worker_output):
