@@ -17,6 +17,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.get_logger().setLevel(logging.ERROR)
 
 from quantiphyse.utils import QpException
+from quantiphyse.utils.enums import Boundary
 from quantiphyse.processes import Process
 
 MAX_LOG_SIZE=100000
@@ -170,6 +171,14 @@ class CvrPetCo2GlmProcess(Process):
                         full_data = np.zeros(self.grid.shape, dtype=np.float32)
                     full_data[self.bb_slices] = recombined_data.reshape(full_data[self.bb_slices].shape)
                     self.ivm.add(full_data, grid=self.grid, name=name, make_current=first, roi=False)
+
+                    # Set some view defaults because we know what range these should be in
+                    self.ivm.data[name].view.boundary = Boundary.CLAMP
+                    if key == "cvr":
+                        self.ivm.data[name].view.cmap_range = (0, 1)
+                    if key == "delay":
+                        self.ivm.data[name].view.cmap_range = (-15, 15)
+
                     first = False
         else:
             # Include the log of the first failed process
@@ -334,6 +343,14 @@ class CvrPetCo2VbProcess(Process):
                         full_data = np.zeros(self.grid.shape, dtype=np.float32)
                     full_data[self.bb_slices] = recombined_data.reshape(full_data[self.bb_slices].shape)
                     self.ivm.add(full_data, grid=self.grid, name=name, make_current=first, roi=False)
+
+                    # Set some view defaults because we know what range these should be in
+                    self.ivm.data[name].view.boundary = Boundary.CLAMP
+                    if key == "cvr":
+                        self.ivm.data[name].view.cmap_range = (0, 1)
+                    if key == "delay":
+                        self.ivm.data[name].view.cmap_range = (-15, 15)
+
                     first = False
         else:
             # Include the log of the first failed process
