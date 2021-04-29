@@ -1,2 +1,5 @@
+vaby
+vaby_avb
+vaby_models_cvr
 numpy
 quantiphyse-fabber
