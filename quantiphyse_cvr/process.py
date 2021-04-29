@@ -187,7 +187,7 @@ class CvrPetCo2GlmProcess(Process):
                     self.log(out.log)
                     break
 
-def _run_vb(worker_id, queue, data, mask, phys_data, tr, infer_sig0, infer_delay, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step, output_var):
+def _run_vb(worker_id, queue, data, mask, phys_data, tr, infer_sig0, infer_delay, baseline, samp_rate, data_start_time, spatial, maxits, output_var):
     try:
         from vaby.data import DataModel
         from vaby_avb import Avb
@@ -204,8 +204,13 @@ def _run_vb(worker_id, queue, data, mask, phys_data, tr, infer_sig0, infer_delay
             #"delay" : mech_delay,
             "infer_sig0" : infer_sig0,
             "infer_delay" : infer_delay,
-            "max_iterations" : 10,
+            "max_iterations" : maxits,
         }
+
+        if spatial:
+            options["param_overrides"] = {}
+            for param in ("cvr", "delay", "sig0"):
+                options["param_overrides"][param] = {"prior_type" : "M"}
 
         data_model = DataModel(data, mask=mask, **options)
         fwd_model = CvrPetCo2Model(data_model, **options)
@@ -277,9 +282,8 @@ class CvrPetCo2VbProcess(Process):
         samp_rate = options.pop("samp-rate", 100)
         #mech_delay = options.pop("delay", 15)
         data_start_time = options.pop("data-start-time", None)
-        delay_min = options.pop("delay-min", 0)
-        delay_max = options.pop("delay-max", 0)
-        delay_step = options.pop("delay-step", 1)
+        spatial = options.pop("spatial", False)
+        maxits = options.pop("max-iterations", 10)
         output_var = options.pop("output-var", False)
 
         infer_sig0 = options.pop("infer-sig0", True)
@@ -294,7 +298,7 @@ class CvrPetCo2VbProcess(Process):
         #n_workers = data_bb.shape[0]
         n_workers = 1
 
-        args = [data_bb, mask_bb, phys_data, tr, infer_sig0, infer_delay, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step, output_var]
+        args = [data_bb, mask_bb, phys_data, tr, infer_sig0, infer_delay, baseline, samp_rate, data_start_time, spatial, maxits, output_var]
         self.voxels_done = [0] * n_workers
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)

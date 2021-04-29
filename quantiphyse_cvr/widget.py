@@ -150,8 +150,10 @@ class VbOptions(OptionsWidget):
         self._optbox.add("Infer constant signal offset", BoolOption(default=True), key="infer-sig0")
         self._optbox.add("Infer delay", BoolOption(default=True), key="infer-delay")
 
-        #self._optbox.add("<b>Model fitting options</b>")
-        #self._optbox.add("Spatial regularization", BoolOption(default=True), key="spatial")
+        self._optbox.add("<b>Model fitting options</b>")
+        self._optbox.add("Number of iterations", NumericOption(minval=0, maxval=100, default=10, intonly=True), key="max-iterations")
+        self._optbox.add("Spatial regularization", BoolOption(default=True), key="spatial")
+
         self._optbox.add("<b>Output options</b>")
         self._optbox.add("Output variance maps", BoolOption(), key="output-var")
         self._optbox.add("Output data name suffix", TextOption(), checked=True, key="output-suffix")
@@ -164,6 +166,7 @@ class VbOptions(OptionsWidget):
         opts = {}
         opts.update(self.acq_options.options())
         opts.update(self._optbox.values())
+
         self.debug("CvrPetCo2Vb options: %s", opts)
         processes = [
             {"CvrPetCo2Vb" : opts},
