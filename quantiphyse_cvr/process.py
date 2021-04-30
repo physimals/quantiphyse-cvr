@@ -187,6 +187,12 @@ class CvrPetCo2GlmProcess(Process):
                     self.log(out.log)
                     break
 
+    def output_data_items(self):
+        """
+        :return: a sequence of data item names that were output
+        """
+        return [key + self.suffix for key in ("cvr", "delay", "sig0")]
+
 def _run_vb(worker_id, queue, data, mask, phys_data, tr, infer_sig0, infer_delay, baseline, samp_rate, data_start_time, spatial, maxits, output_var):
     try:
         from vaby.data import DataModel
@@ -362,4 +368,9 @@ class CvrPetCo2VbProcess(Process):
                 if out and isinstance(out, Exception) and hasattr(out, "log") and len(out.log) > 0:
                     self.log(out.log)
                     break
-            
+
+    def output_data_items(self):
+        """
+        :return: a sequence of data item names that were output
+        """
+        return [key + self.suffix for key in ("cvr", "delay", "sig0")]

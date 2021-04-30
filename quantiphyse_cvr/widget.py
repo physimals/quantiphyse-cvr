@@ -87,7 +87,7 @@ class FabberVbOptions(OptionsWidget):
         self._optbox.add("Output data name suffix", TextOption(), checked=True, key="output-suffix")
 
         vbox.addWidget(self._optbox)
-        vbox.addWidget(RunWidget(self))
+        vbox.addWidget(RunWidget(self, save_option=True))
         vbox.addStretch(1)
 
     def processes(self):
@@ -159,7 +159,7 @@ class VbOptions(OptionsWidget):
         self._optbox.add("Output data name suffix", TextOption(), checked=True, key="output-suffix")
 
         vbox.addWidget(self._optbox)
-        vbox.addWidget(RunWidget(self))
+        vbox.addWidget(RunWidget(self, save_option=True))
         vbox.addStretch(1)
 
     def processes(self):
@@ -192,7 +192,7 @@ class GlmOptions(OptionsWidget):
         self._optbox.add("Output data name suffix", TextOption(), checked=True, key="output-suffix")
 
         vbox.addWidget(self._optbox)
-        vbox.addWidget(RunWidget(self))
+        vbox.addWidget(RunWidget(self, save_option=True))
         vbox.addStretch(1)
 
     def processes(self):
