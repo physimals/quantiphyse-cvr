@@ -239,14 +239,15 @@ class CvrPetCo2Widget(QpWidget):
 
     def _tab_changed(self):
         tab = self.tabs.currentIndex()
-        if tab in (1, 2, 3):
+        if tab in (1, 2):
             self.current_tab = tab
 
     def processes(self):
         # For batch options, return whichever tab was last selected
+        # (default to VB options if on acquisition tab)
         if self.current_tab == 1:
-            return self.fabber_opts.processes()
-        elif self.current_tab == 2:
             return self.vb_opts.processes()
-        elif self.current_tab == 3:
+        elif self.current_tab == 2:
             return self.glm_opts.processes()
+        else:
+            return []
