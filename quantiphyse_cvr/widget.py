@@ -7,10 +7,7 @@ Copyright (c) 2021 University of Nottingham, Martin Craig
 
 from __future__ import division, unicode_literals, absolute_import, print_function
 
-try:
-    from PySide import QtGui, QtCore, QtGui as QtWidgets
-except ImportError:
-    from PySide2 import QtGui, QtCore, QtWidgets
+from PySide2 import QtGui, QtCore, QtWidgets
 
 from quantiphyse.gui.widgets import QpWidget, Citation, TitleWidget, RunWidget
 from quantiphyse.gui.options import OptionBox, DataOption, NumericOption, BoolOption, NumberListOption, TextOption, FileOption, ChoiceOption
@@ -22,20 +19,20 @@ FAB_CITE_TITLE = "Variational Bayesian inference for a non-linear forward model"
 FAB_CITE_AUTHOR = "Chappell MA, Groves AR, Whitcher B, Woolrich MW."
 FAB_CITE_JOURNAL = "IEEE Transactions on Signal Processing 57(1):223-236, 2009."
 
-class OptionsWidget(QtGui.QWidget, LogSource):
+class OptionsWidget(QtWidgets.QWidget, LogSource):
 
     sig_changed = QtCore.Signal()
 
     def __init__(self, ivm, parent):
         LogSource.__init__(self)
-        QtGui.QWidget.__init__(self, parent)
+        QtWidgets.QWidget.__init__(self, parent)
         self.ivm = ivm
 
 class AcquisitionOptions(OptionsWidget):
     def __init__(self, ivm, parent):
         OptionsWidget.__init__(self, ivm, parent)
 
-        vbox = QtGui.QVBoxLayout()
+        vbox = QtWidgets.QVBoxLayout()
         self.setLayout(vbox)
 
         self._optbox = OptionBox()
@@ -70,7 +67,7 @@ class FabberVbOptions(OptionsWidget):
         OptionsWidget.__init__(self, ivm, parent)
         self.acq_options = acq_options
 
-        vbox = QtGui.QVBoxLayout()
+        vbox = QtWidgets.QVBoxLayout()
         self.setLayout(vbox)
 
         cite = Citation(FAB_CITE_TITLE, FAB_CITE_AUTHOR, FAB_CITE_JOURNAL)
@@ -139,7 +136,7 @@ class VbOptions(OptionsWidget):
         OptionsWidget.__init__(self, ivm, parent)
         self.acq_options = acq_options
 
-        vbox = QtGui.QVBoxLayout()
+        vbox = QtWidgets.QVBoxLayout()
         self.setLayout(vbox)
 
         cite = Citation(FAB_CITE_TITLE, FAB_CITE_AUTHOR, FAB_CITE_JOURNAL)
@@ -179,7 +176,7 @@ class GlmOptions(OptionsWidget):
         OptionsWidget.__init__(self, ivm, parent)
         self.acq_options = acq_options
 
-        vbox = QtGui.QVBoxLayout()
+        vbox = QtWidgets.QVBoxLayout()
         self.setLayout(vbox)
 
         self._optbox = OptionBox()
@@ -216,13 +213,13 @@ class CvrPetCo2Widget(QpWidget):
         self.current_tab = 0
 
     def init_ui(self):
-        vbox = QtGui.QVBoxLayout()
+        vbox = QtWidgets.QVBoxLayout()
         self.setLayout(vbox)
 
         title = TitleWidget(self, help="cvr", subtitle="Cerebrovascular reactivity using BOLD-MRI and PETCO2 v%s" % __version__)
         vbox.addWidget(title)
 
-        self.tabs = QtGui.QTabWidget()
+        self.tabs = QtWidgets.QTabWidget()
         self.tabs.currentChanged.connect(self._tab_changed)
         vbox.addWidget(self.tabs)
 
