@@ -27,20 +27,18 @@ def _get_progress_cb(worker_id, queue, n_voxels):
         queue.put((worker_id, frac * n_voxels))
     return _progress
 
-def _run_glm(worker_id, queue, data, mask, phys_data, tr, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step):
+def _run_glm(worker_id, queue, data, mask, regressors, regressor_types, regressor_trs, tr, baseline, data_start_time, delay_min, delay_max, delay_step):
     try:
         from vaby.data import DataModel
         from vaby_models_cvr.petco2 import CvrPetCo2Model
 
         options = {
-            "phys_data" : phys_data,
+            "regressors" : regressors,
+            "regressor_trs" : regressor_trs,
+            "regressor_types" : regressor_types,
             "tr" : tr,
             "baseline" : baseline,
-            #"blocksize_on" : blocksize_on,
-            #"blocksize_off" : blocksize_off,
-            "samp_rate" : samp_rate,
             "data_start_time" : data_start_time,
-            #"delay" : mech_delay,
         }
 
         # Set up log to go to string buffer
@@ -93,21 +91,34 @@ class CvrPetCo2GlmProcess(Process):
         if self.suffix != "" and self.suffix[0] != "_": 
             self.suffix = "_" + self.suffix
 
-        phys_data = options.pop('phys-data', None)
-        if phys_data is None:
-            raise QpException("Physiological data option 'phys-data' must be given")
-        if isinstance(phys_data, str) and not os.path.isabs(phys_data):
-            phys_data = os.path.join(self.indir, phys_data)
+        regressors = options.pop('regressors', None)
+        regressor_trs = options.pop('regressor_trs', None)
+        regressor_types = options.pop('regressor_types', None)
+        if regressors is None or regressor_types is None or regressor_trs is None:
+            raise QpException("Regressors, regressor type and regressor TR options must be given")
+        if isinstance(regressors, str):
+            regressors = regressors.split()
+            new_regressors = []
+            for r in regressors:
+                if not os.path.isabs(r):
+                    r = os.path.join(self.indir, r)
+                new_regressors.append(r)
+            regressors = ",".join(new_regressors)
+
+        if isinstance(regressor_trs, str):
+            try:
+                regressor_trs = [float(v) for v in regressor_trs.split(",")]
+            except ValueError:
+                raise QpException("Regressor TRs should be comma separated list of numbers")
+        elif isinstance(regressor_trs, (int, float)):
+            regressor_trs = [regressor_trs]
+
         tr = options.pop("tr", None)
         if tr is None:
             raise QpException("TR must be given")
 
         # Non-compulsary options
         baseline = options.pop("baseline", 60)
-        #blocksize_on = options.pop("blocksize-on", 120)
-        #blocksize_off = options.pop("blocksize-off", 120)
-        samp_rate = options.pop("samp-rate", 100)
-        #mech_delay = options.pop("delay", 15)
         data_start_time = options.pop("data-start-time", None)
         delay_min = options.pop("delay-min", 0)
         delay_max = options.pop("delay-max", 0)
@@ -122,7 +133,7 @@ class CvrPetCo2GlmProcess(Process):
         #n_workers = data_bb.shape[0]
         n_workers = 1
 
-        args = [data_bb, mask_bb, phys_data, tr, baseline, samp_rate, data_start_time, delay_min, delay_max, delay_step]
+        args = [data_bb, mask_bb, regressors, regressor_types, regressor_trs, tr, baseline, data_start_time, delay_min, delay_max, delay_step]
         self.voxels_done = [0] * n_workers
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)
@@ -193,21 +204,19 @@ class CvrPetCo2GlmProcess(Process):
         """
         return [key + self.suffix for key in ("cvr", "delay", "sig0")]
 
-def _run_vb(worker_id, queue, data, mask, phys_data, tr, infer_sig0, infer_delay, baseline, samp_rate, data_start_time, spatial, maxits, output_var):
+def _run_vb(worker_id, queue, data, mask, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, output_var):
     try:
         from vaby.data import DataModel
         from vaby_avb import Avb
         from vaby_models_cvr.petco2 import CvrPetCo2Model
 
         options = {
-            "phys_data" : phys_data,
+            "regressors" : regressors,
+            "regressor_trs" : regressor_trs,
+            "regressor_types" : regressor_types,
             "tr" : tr,
             "baseline" : baseline,
-            #"blocksize_on" : blocksize_on,
-            #"blocksize_off" : blocksize_off,
-            "samp_rate" : samp_rate,
             "data_start_time" : data_start_time,
-            #"delay" : mech_delay,
             "infer_sig0" : infer_sig0,
             "infer_delay" : infer_delay,
             "max_iterations" : maxits,
@@ -272,21 +281,36 @@ class CvrPetCo2VbProcess(Process):
         if self.suffix != "" and self.suffix[0] != "_": 
             self.suffix = "_" + self.suffix
 
-        phys_data = options.pop('phys-data', None)
-        if phys_data is None:
-            raise QpException("Physiological data option 'phys-data' must be given")
-        if isinstance(phys_data, str) and not os.path.isabs(phys_data):
-            phys_data = os.path.join(self.indir, phys_data)
+        regressors = options.pop('regressors', None)
+        regressor_trs = options.pop('regressor_trs', None)
+        regressor_types = options.pop('regressor_types', None)
+        if regressors is None or regressor_types is None or regressor_trs is None:
+            raise QpException("Regressors, regressor type and regressor TR options must be given")
+
+        if isinstance(regressors, str):
+            regressors = regressors.split()
+            new_regressors = []
+            for r in regressors:
+                if not os.path.isabs(r):
+                    r = os.path.join(self.indir, r)
+                new_regressors.append(r)
+            regressors = ",".join(new_regressors)
+
+        if isinstance(regressor_trs, str):
+            try:
+                regressor_trs = [float(v) for v in regressor_trs.split(",")]
+            except ValueError:
+                raise QpException("Regressor TRs should be comma separated list of numbers")
+        elif isinstance(regressor_trs, (int, float)):
+            regressor_trs = [regressor_trs]
+
         tr = options.pop("tr", None)
         if tr is None:
             raise QpException("TR must be given")
 
         # Non-compulsary options
         baseline = options.pop("baseline", 60)
-        #blocksize_on = options.pop("blocksize-on", 120)
-        #blocksize_off = options.pop("blocksize-off", 120)
         samp_rate = options.pop("samp-rate", 100)
-        #mech_delay = options.pop("delay", 15)
         data_start_time = options.pop("data-start-time", None)
         spatial = options.pop("spatial", False)
         maxits = options.pop("max-iterations", 10)
@@ -304,7 +328,7 @@ class CvrPetCo2VbProcess(Process):
         #n_workers = data_bb.shape[0]
         n_workers = 1
 
-        args = [data_bb, mask_bb, phys_data, tr, infer_sig0, infer_delay, baseline, samp_rate, data_start_time, spatial, maxits, output_var]
+        args = [data_bb, mask_bb, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, output_var]
         self.voxels_done = [0] * n_workers
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)

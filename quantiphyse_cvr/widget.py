@@ -29,6 +29,9 @@ class OptionsWidget(QtWidgets.QWidget, LogSource):
         self.ivm = ivm
 
 class AcquisitionOptions(OptionsWidget):
+
+    N_REGRESSORS = 3
+
     def __init__(self, ivm, parent):
         OptionsWidget.__init__(self, ivm, parent)
 
@@ -39,20 +42,58 @@ class AcquisitionOptions(OptionsWidget):
         self._optbox.add("<b>Data</b>")
         self._optbox.add("BOLD timeseries data", DataOption(self.ivm), key="data")
         self._optbox.add("ROI", DataOption(self.ivm, rois=True, data=False), key="roi")
-        self._optbox.add("Physiological data (CO<sub>2</sub>/O<sub>2</sub>)", FileOption(plot_btn=True), key="phys-data")
-        self._optbox.add("Sampling frequency (Hz)", NumericOption(minval=0, maxval=1000, default=100, intonly=True), key="samp-rate")
-        #self._optbox.add("ON-block duration (s)", NumericOption(minval=0, maxval=200, default=120, intonly=True), key="blocksize-on")
-        #self._optbox.add("OFF-block duration (s)", NumericOption(minval=0, maxval=200, default=120, intonly=True), key="blocksize-off")
+
+        #self._optbox.add("Physiological data (CO<sub>2</sub>/O<sub>2</sub>)", FileOption(plot_btn=True), key="phys-data")
+        #self._optbox.add("Sampling frequency (Hz)", NumericOption(minval=0, maxval=1000, default=100, intonly=True), key="samp-rate")
         self._optbox.add("TR for MRI timeseries (s)", NumericOption(minval=0, maxval=5, default=1.0), key="tr")
         self._optbox.add("Baseline period (s)", NumericOption(minval=0, maxval=200, default=60, intonly=True), key="baseline")
         self._optbox.add("MRI timeseries alignment", ChoiceOption(["Automatic", "Manual"]), key="mri-align")
-        #self._optbox.add("PCO2 mechanical delay (s)", NumericOption(minval=0, maxval=60, default=15, intonly=True), key="delay")
         self._optbox.option("mri-align").sig_changed.connect(self._align_changed)
         self._optbox.add("MRI timeseries start time (s)", NumericOption(minval=0, maxval=1000, default=0), key="data-start-time")
-
         vbox.addWidget(self._optbox)
+
+        self._optbox_reg = OptionBox()
+        self._optbox_reg.add("<b>Regressors</b>")
+        for idx in range(self.N_REGRESSORS):
+            self._optbox_reg.add("Regressor %i" % (idx+1), ChoiceOption(["Unprocessed CO2", "Preprocessed pETCO2", "Ramp (linear drift)", "Custom"], ["co2", "petco2", "ramp", "custom"]), 
+                             checked=True, default=True, key="type_%i" % (idx+1))
+            self._optbox_reg.option("type_%i" % (idx+1)).sig_changed.connect(self._regressor_changed)
+            self._optbox_reg.add("Data (CO<sub>2</sub>/O<sub>2</sub>)", FileOption(plot_btn=True), key="data_%i" % (idx+1))
+            self._optbox_reg.add("Time resolution (s)", NumericOption(minval=0, maxval=10, default=1), key="tr_%i" % (idx+1))
+
+        vbox.addWidget(self._optbox_reg)
+
         vbox.addStretch(1)
+        self._regressor_changed()
         self._align_changed()
+
+    def _regressor_changed(self):
+        for idx in range(self.N_REGRESSORS):
+            opts = self._optbox_reg.values()
+            extras_visible = "type_%i" % (idx+1) in opts and opts["type_%i" % (idx+1)] != "ramp"
+            self._optbox_reg.set_visible("data_%i" % (idx+1), extras_visible)
+            self._optbox_reg.set_visible("tr_%i" % (idx+1), extras_visible)
+
+    def _add_regressor_options(self, opts):
+        regressors = []
+        regressor_types = []
+        regressor_trs = []
+        reg_opts = self._optbox_reg.values()
+        for idx in range(self.N_REGRESSORS):
+            regressor_type = reg_opts.get("type_%i" % (idx+1), None)
+            if regressor_type is not None:
+                if regressor_type != "ramp":
+                    regressor_types.append(regressor_type)
+                    regressors.append(reg_opts["data_%i" % (idx+1)])
+                    regressor_trs.append(reg_opts["tr_%i" % (idx+1)])
+                else:
+                    # FIXME can't mix file regressors with Numpy array, need to write to tmp file
+                    regressor_types.append("custom")
+                    regressor_trs.append(opts["tr"])
+                    regressors.append(np.linspace(0, 1, self.ivm.data[opts["data"]].nvols))
+        opts["regressors"] = ",".join(regressors)
+        opts["regressor_trs"] = ",".join(["%.3f" % v for v in regressor_trs])
+        opts["regressor_types"] = ",".join(regressor_types)
 
     def _align_changed(self):
         self._optbox.set_visible("data-start-time", self._optbox.option("mri-align").value == "Manual")
@@ -60,6 +101,7 @@ class AcquisitionOptions(OptionsWidget):
     def options(self):
         opts = self._optbox.values()
         opts.pop("mri-align", None)
+        self._add_regressor_options(opts)
         return opts
 
 class FabberVbOptions(OptionsWidget):
