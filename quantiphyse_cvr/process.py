@@ -51,8 +51,17 @@ def _run_glm(worker_id, queue, data, mask, regressors, regressor_types, regresso
 
         data_model = DataModel(data, mask=mask)
         fwd_model = CvrPetCo2Model(data_model, **options)
-        cvr, delay, sig0, modelfit = fwd_model.fit_glm(delay_min=delay_min, delay_max=delay_max, delay_step=delay_step, progress_cb=_get_progress_cb(worker_id, queue, data_model.n_unmasked_voxels))
-        ret = {"cvr" : cvr, "delay" : delay, "sig0" : sig0, "modelfit" : modelfit}
+        glmdata = fwd_model.fit_glm(delay_min=delay_min, delay_max=delay_max, delay_step=delay_step, progress_cb=_get_progress_cb(worker_id, queue, data_model.n_unmasked_voxels))
+        regressor_types = [s.strip() for s in regressor_types.split(",")]
+        ret = {}
+        for idx, regressor_type in enumerate(regressor_types):
+            if regressor_type in ("co2", "petco2"):
+                ret["cvr%i" % (idx+1)] = glmdata[idx]
+            else:
+                ret["beta%i" % (idx+1)] = glmdata[idx]
+        ret["delay"] = glmdata[-3]
+        ret["sig0"] = glmdata[-2]
+        ret["modelfit"] = glmdata[-1]
         for name in list(ret.keys()):
             data = ret[name]
             shape = data_model.shape
@@ -221,7 +230,6 @@ def _run_vb(worker_id, queue, data, mask, regressors, regressor_types, regressor
             "infer_delay" : infer_delay,
             "max_iterations" : maxits,
         }
-
         if spatial:
             options["param_overrides"] = {}
             for param in ("cvr", "delay", "sig0"):
@@ -240,7 +248,7 @@ def _run_vb(worker_id, queue, data, mask, regressors, regressor_types, regressor
 
         tpts = fwd_model.tpts()
         avb = Avb(tpts, data_model, fwd_model, progress_cb=_get_progress_cb(worker_id, queue, data_model.n_unmasked_voxels), **options)
-        avb.run()
+        avb.run(**options)
 
         ret = {}
         for idx, param in enumerate(fwd_model.params):
@@ -310,7 +318,6 @@ class CvrPetCo2VbProcess(Process):
 
         # Non-compulsary options
         baseline = options.pop("baseline", 60)
-        samp_rate = options.pop("samp-rate", 100)
         data_start_time = options.pop("data-start-time", None)
         spatial = options.pop("spatial", False)
         maxits = options.pop("max-iterations", 10)
