@@ -121,6 +121,7 @@ class CvrPetCo2GlmProcess(Process):
                 raise QpException("Regressor TRs should be comma separated list of numbers")
         elif isinstance(regressor_trs, (int, float)):
             regressor_trs = [regressor_trs]
+        self.n_regressors = len(regressor_trs)
 
         tr = options.pop("tr", None)
         if tr is None:
@@ -209,9 +210,14 @@ class CvrPetCo2GlmProcess(Process):
 
     def output_data_items(self):
         """
-        :return: a sequence of data item names that were output
+        :return: a sequence of data item names that may be output
         """
-        return [key + self.suffix for key in ("cvr", "delay", "sig0")]
+        data_items = ["cvr", "delay", "sig0"]
+        for idx in range(self.n_regressors):
+            data_items.append("cvr%i" % (idx+1))
+            data_items.append("beta%i" % (idx+1))
+
+        return [key + self.suffix for key in data_items]
 
 def _run_vb(worker_id, queue, data, mask, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, output_var):
     try:
@@ -311,6 +317,7 @@ class CvrPetCo2VbProcess(Process):
                 raise QpException("Regressor TRs should be comma separated list of numbers")
         elif isinstance(regressor_trs, (int, float)):
             regressor_trs = [regressor_trs]
+        self.n_regressors = len(regressor_trs)
 
         tr = options.pop("tr", None)
         if tr is None:
@@ -402,6 +409,11 @@ class CvrPetCo2VbProcess(Process):
 
     def output_data_items(self):
         """
-        :return: a sequence of data item names that were output
+        :return: a sequence of data item names that may be output
         """
-        return [key + self.suffix for key in ("cvr", "delay", "sig0")]
+        data_items = ["cvr", "delay", "sig0"]
+        for idx in range(self.n_regressors):
+            data_items.append("cvr%i" % (idx+1))
+            data_items.append("beta%i" % (idx+1))
+
+        return [key + self.suffix for key in data_items]
