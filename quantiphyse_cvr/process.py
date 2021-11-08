@@ -241,9 +241,6 @@ def _run_vb(worker_id, queue, data, mask, regressors, regressor_types, regressor
             for param in ("cvr", "delay", "sig0"):
                 options["param_overrides"][param] = {"prior_type" : "M"}
 
-        data_model = DataModel(data, mask=mask, **options)
-        fwd_model = CvrPetCo2Model(data_model, **options)
-
         # Set up log to go to string buffer
         log = io.StringIO()
         handler = logging.StreamHandler(log)
@@ -252,6 +249,8 @@ def _run_vb(worker_id, queue, data, mask, regressors, regressor_types, regressor
         logging.getLogger().addHandler(handler)
         logging.getLogger().setLevel(logging.INFO)
 
+        data_model = DataModel(data, mask=mask, **options)
+        fwd_model = CvrPetCo2Model(data_model, **options)
         tpts = fwd_model.tpts()
         avb = Avb(tpts, data_model, fwd_model, progress_cb=_get_progress_cb(worker_id, queue, data_model.n_unmasked_voxels), **options)
         avb.run(**options)
