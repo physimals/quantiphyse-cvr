@@ -245,7 +245,7 @@ def _run_vb(worker_id, queue, data, mask, regressors, regressor_types, regressor
             for param in ("cvr", "delay", "sig0"):
                 options["param_overrides"][param] = {"prior_type" : "M"}
 
-        _runtime, avb = run(data, "cvr_petco2", "/home/bbzmsc/cvr_out", mask=mask, **options)
+        _runtime, avb = run(data, "cvr_petco2", mask=mask, **options)
         ret = {}
         for idx, param in enumerate(avb.params):
             data = avb.model_mean[idx]
