@@ -51,7 +51,7 @@ def _run_glm(worker_id, queue, data, mask, regressors, regressor_types, regresso
 
         data_model = DataModel(data, mask=mask)
         fwd_model = CvrPetCo2Model(data_model, **options)
-        glmdata = fwd_model.fit_glm(delay_min=delay_min, delay_max=delay_max, delay_step=delay_step, progress_cb=_get_progress_cb(worker_id, queue, data_model.n_unmasked_voxels))
+        glmdata = fwd_model.fit_glm(delay_min=delay_min, delay_max=delay_max, delay_step=delay_step, progress_cb=_get_progress_cb(worker_id, queue, data_model.data_space.size))
         regressor_types = [s.strip() for s in regressor_types.split(",")]
         ret = {}
         for idx, regressor_type in enumerate(regressor_types):
@@ -64,13 +64,13 @@ def _run_glm(worker_id, queue, data, mask, regressors, regressor_types, regresso
         ret["modelfit"] = glmdata[-1]
         for name in list(ret.keys()):
             data = ret[name]
-            shape = data_model.shape
+            shape = data_model.data_space.shape
             if data.ndim > 1:
                 shape = list(shape) + [data.shape[1]]
             ndata = np.zeros(shape, dtype=np.float)
             ndata[mask > 0] = data
             ret[name] = ndata
-        queue.put((worker_id, data_model.n_unmasked_voxels))
+        queue.put((worker_id, data_model.data_space.size))
 
         ret = (ret, log.getvalue())
         return worker_id, True, ret
@@ -221,11 +221,13 @@ class CvrPetCo2GlmProcess(Process):
 
 def _run_vb(worker_id, queue, data, mask, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, output_var):
     try:
-        from vaby.data import DataModel
-        from vaby_avb import Avb
-        from vaby_models_cvr.petco2 import CvrPetCo2Model
+        from vaby.main import run
+
+        # Set up log to go to string buffer
+        log = io.StringIO()
 
         options = {
+            "method" : "avb",
             "regressors" : regressors,
             "regressor_trs" : regressor_trs,
             "regressor_types" : regressor_types,
@@ -235,38 +237,27 @@ def _run_vb(worker_id, queue, data, mask, regressors, regressor_types, regressor
             "infer_sig0" : infer_sig0,
             "infer_delay" : infer_delay,
             "max_iterations" : maxits,
+            "log_stream" : log,
+            "log_level" : "INFO", # FIXME debugging output
         }
         if spatial:
             options["param_overrides"] = {}
             for param in ("cvr", "delay", "sig0"):
                 options["param_overrides"][param] = {"prior_type" : "M"}
 
-        # Set up log to go to string buffer
-        log = io.StringIO()
-        handler = logging.StreamHandler(log)
-        handler.setFormatter(logging.Formatter('%(levelname)s : %(message)s'))
-        logging.getLogger().handlers.clear()
-        logging.getLogger().addHandler(handler)
-        logging.getLogger().setLevel(logging.INFO)
-
-        data_model = DataModel(data, mask=mask, **options)
-        fwd_model = CvrPetCo2Model(data_model, **options)
-        tpts = fwd_model.tpts()
-        avb = Avb(tpts, data_model, fwd_model, progress_cb=_get_progress_cb(worker_id, queue, data_model.n_unmasked_voxels), **options)
-        avb.run(**options)
-
+        _runtime, avb = run(data, "cvr_petco2", "/home/bbzmsc/cvr_out", mask=mask, **options)
         ret = {}
-        for idx, param in enumerate(fwd_model.params):
+        for idx, param in enumerate(avb.params):
             data = avb.model_mean[idx]
-            ret[param.name] = data_model.nifti_image(data).get_fdata()
+            ret[param.name] = avb.data_model.data_space.nibabel_image(data).get_fdata()
             if output_var:
                 data = avb.model_var[idx]
-                ret[param.name + "_var"] = data_model.nifti_image(data).get_fdata()
+                ret[param.name + "_var"] = avb.data_model.data_space.nibabel_image(data).get_fdata()
 
-        ret["modelfit"] = data_model.nifti_image(avb.modelfit).get_fdata()
+        ret["modelfit"] = avb.data_model.data_space.nibabel_image(avb.modelfit).get_fdata()
         ret = (ret, log.getvalue())
 
-        queue.put((worker_id, data_model.n_unmasked_voxels))
+        queue.put((worker_id, avb.data_model.data_space.size))
         return worker_id, True, ret
     except:
         import traceback
