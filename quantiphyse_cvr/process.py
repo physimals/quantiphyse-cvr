@@ -219,15 +219,15 @@ class CvrPetCo2GlmProcess(Process):
 
         return [key + self.suffix for key in data_items]
 
-def _run_vb(worker_id, queue, data, mask, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, output_var):
+def _run_vb(worker_id, queue, data, mask, voxel_sizes, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, output_var):
     try:
         from vaby.main import run
 
         # Set up log to go to string buffer
         log = io.StringIO()
-
         options = {
             "method" : "avb",
+            "voxel_sizes" : voxel_sizes,
             "regressors" : regressors,
             "regressor_trs" : regressor_trs,
             "regressor_types" : regressor_types,
@@ -329,10 +329,11 @@ class CvrPetCo2VbProcess(Process):
         self.debug("Using bounding box: %s", self.bb_slices)
         data_bb = data.raw()[tuple(self.bb_slices)]
         mask_bb = roi.raw()[tuple(self.bb_slices)]
+        voxel_sizes = self.grid.spacing
         #n_workers = data_bb.shape[0]
         n_workers = 1
 
-        args = [data_bb, mask_bb, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, self.output_var]
+        args = [data_bb, mask_bb, voxel_sizes, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, self.output_var]
         self.voxels_done = [0] * n_workers
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)
