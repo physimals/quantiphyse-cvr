@@ -397,6 +397,9 @@ class CvrPetCo2VbProcess(Process):
                     self.log(out.log)
                     break
 
+    def logfile_name(self):
+        return "logfile" + self.suffix
+
     def output_data_items(self):
         """
         :return: a sequence of data item names that may be output
