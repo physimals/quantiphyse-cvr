@@ -318,7 +318,7 @@ class CvrPetCo2VbProcess(Process):
         data_start_time = options.pop("data-start-time", None)
         spatial = options.pop("spatial", False)
         maxits = options.pop("max-iterations", 10)
-        output_var = options.pop("output-var", False)
+        self.output_var = options.pop("output-var", False)
 
         infer_sig0 = options.pop("infer-sig0", True)
         infer_delay = options.pop("infer-delay", True)
@@ -332,7 +332,7 @@ class CvrPetCo2VbProcess(Process):
         #n_workers = data_bb.shape[0]
         n_workers = 1
 
-        args = [data_bb, mask_bb, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, output_var]
+        args = [data_bb, mask_bb, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, self.output_var]
         self.voxels_done = [0] * n_workers
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)
@@ -406,4 +406,7 @@ class CvrPetCo2VbProcess(Process):
             data_items.append("cvr%i" % (idx+1))
             data_items.append("beta%i" % (idx+1))
 
+        if self.output_var:
+            for k in list(data_items):
+                data_items.append(k + "_var")
         return [key + self.suffix for key in data_items]
