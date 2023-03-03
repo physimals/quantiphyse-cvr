@@ -219,9 +219,9 @@ class CvrPetCo2GlmProcess(Process):
 
         return [key + self.suffix for key in data_items]
 
-def _run_vb(worker_id, queue, data, mask, voxel_sizes, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, output_var):
+def _run_vb(worker_id, queue, data, mask, voxel_sizes, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, allow_neg_cvr, baseline, data_start_time, spatial, maxits, output_var):
     try:
-        from vaby.main import run
+        from vaby import run
 
         # Set up log to go to string buffer
         log = io.StringIO()
@@ -236,7 +236,11 @@ def _run_vb(worker_id, queue, data, mask, voxel_sizes, regressors, regressor_typ
             "data_start_time" : data_start_time,
             "infer_sig0" : infer_sig0,
             "infer_delay" : infer_delay,
+            "allow_neg_cvr" : allow_neg_cvr,
             "max_iterations" : maxits,
+            "save_mean" : True,
+            "save_var" : output_var,
+            "save_model_fit" : True,
             "log_stream" : log,
             "log_level" : "INFO", # FIXME debugging output
         }
@@ -245,19 +249,15 @@ def _run_vb(worker_id, queue, data, mask, voxel_sizes, regressors, regressor_typ
             for param in ("cvr", "delay", "sig0"):
                 options["param_overrides"][param] = {"prior_type" : "M"}
 
-        _runtime, avb = run(data, "cvr_petco2", mask=mask, **options)
-        ret = {}
-        for idx, param in enumerate(avb.params):
-            data = avb.model_mean[idx]
-            ret[param.name] = avb.data_model.data_space.nibabel_image(data).get_fdata()
-            if output_var:
-                data = avb.model_var[idx]
-                ret[param.name + "_var"] = avb.data_model.data_space.nibabel_image(data).get_fdata()
+        outdict = {}
+        _runtime, _state = run(data, "cvr_petco2", mask=mask, outdict=outdict, **options)
 
-        ret["modelfit"] = avb.data_model.data_space.nibabel_image(avb.modelfit).get_fdata()
+        ret = {}
+        for name, nii in outdict.items():
+            ret[name] = nii.get_fdata()
         ret = (ret, log.getvalue())
 
-        queue.put((worker_id, avb.data_model.data_space.size))
+        queue.put((worker_id, np.count_nonzero(mask)))
         return worker_id, True, ret
     except:
         import traceback
@@ -322,6 +322,7 @@ class CvrPetCo2VbProcess(Process):
 
         infer_sig0 = options.pop("infer-sig0", True)
         infer_delay = options.pop("infer-delay", True)
+        allow_neg_cvr = options.pop("allow-neg-cvr", False)
         
         # Use smallest sub-array of the data which contains all unmasked voxels
         self.grid = data.grid
@@ -333,7 +334,7 @@ class CvrPetCo2VbProcess(Process):
         #n_workers = data_bb.shape[0]
         n_workers = 1
 
-        args = [data_bb, mask_bb, voxel_sizes, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, baseline, data_start_time, spatial, maxits, self.output_var]
+        args = [data_bb, mask_bb, voxel_sizes, regressors, regressor_types, regressor_trs, tr, infer_sig0, infer_delay, allow_neg_cvr, baseline, data_start_time, spatial, maxits, self.output_var]
         self.voxels_done = [0] * n_workers
         self.total_voxels = np.count_nonzero(roi.raw())
         self.start_bg(args, n_workers=n_workers)

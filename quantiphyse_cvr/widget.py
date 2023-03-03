@@ -188,6 +188,7 @@ class VbOptions(OptionsWidget):
         self._optbox.add("<b>Model options</b>")
         self._optbox.add("Infer constant signal offset", BoolOption(default=True), key="infer-sig0")
         self._optbox.add("Infer delay", BoolOption(default=True), key="infer-delay")
+        self._optbox.add("Allow negative CVR", BoolOption(default=False), key="allow-neg-cvr")
 
         self._optbox.add("<b>Model fitting options</b>")
         self._optbox.add("Number of iterations", NumericOption(minval=0, maxval=100, default=10, intonly=True), key="max-iterations")
