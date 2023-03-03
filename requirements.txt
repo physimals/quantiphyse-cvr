@@ -1,4 +1,4 @@
-vaby
+vaby>=0.2
 vaby_avb
 vaby_models_cvr
 numpy
