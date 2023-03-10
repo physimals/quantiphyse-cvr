@@ -171,6 +171,7 @@ class CvrPetCo2GlmProcess(Process):
                     if len(log) > MAX_LOG_SIZE:
                         self.log("WARNING: Log was too large - truncated at %i chars" % MAX_LOG_SIZE)
                     break
+
             first = True
             self.data_items = []
             for key in data_keys:
@@ -195,11 +196,10 @@ class CvrPetCo2GlmProcess(Process):
 
                     # Set some view defaults because we know what range these should be in
                     self.ivm.data[name].view.boundary = Boundary.CLAMP
-                    if key == "cvr":
+                    if "cvr" in key:
                         self.ivm.data[name].view.cmap_range = (0, 1)
-                    if key == "delay":
+                    if "delay" in key:
                         self.ivm.data[name].view.cmap_range = (-15, 15)
-
                     first = False
         else:
             # Include the log of the first failed process
@@ -386,11 +386,10 @@ class CvrPetCo2VbProcess(Process):
 
                     # Set some view defaults because we know what range these should be in
                     self.ivm.data[name].view.boundary = Boundary.CLAMP
-                    if key == "cvr":
+                    if "cvr" in key:
                         self.ivm.data[name].view.cmap_range = (0, 1)
-                    if key == "delay":
+                    if "delay" in key:
                         self.ivm.data[name].view.cmap_range = (-15, 15)
-
                     first = False
         else:
             # Include the log of the first failed process
@@ -411,7 +410,7 @@ class CvrPetCo2VbProcess(Process):
             data_items.append("cvr%i" % (idx+1))
             data_items.append("beta%i" % (idx+1))
 
+        data_items += ["mean_" + k for k in data_items]
         if self.output_var:
-            for k in list(data_items):
-                data_items.append(k + "_var")
+            data_items += ["var_" + k for k in data_items]
         return [key + self.suffix for key in data_items]
